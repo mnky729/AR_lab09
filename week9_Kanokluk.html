@@ -1,0 +1,310 @@
+<!-- Kanokluk Supthamrong 6280563 -->
+
+<!DOCTYPE html> 
+<html> 
+  <head> 
+    <title>A-Frame AR.js Marker Tester</title> 
+    <meta charset="utf-8" /> 
+    <!-- A-Frame: Core 3D/VR/AR Framework --> 
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script> 
+    <!-- AR.js: Adds AR Capabilities --> 
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script> 
+  </head> 
+   
+  <body style="margin: 0; overflow: hidden;"> 
+
+    <script>
+      /** 
+       * Understanding Marker States 
+       *  
+       * Marker visibility can be: 
+       * ┌──────────┐ 
+       * │ Found    │──> markerFound event ──> visible = true 
+       * │ Lost     │──> markerLost event  ──> visible = false 
+       * └──────────┘ 
+       */ 
+      
+      // Global visibility state 
+      const markersVisibility = { marker0: false, marker1: false, marker2: false}; 
+      
+      // Component to track marker visibility 
+      AFRAME.registerComponent("marker-visibility-handler", { 
+        init: function () { 
+          const markerElement = this.el; 
+            
+          // When marker is detected 
+          markerElement.addEventListener("markerFound", () => { 
+            markersVisibility[markerElement.id] = true; 
+            console.log(`${markerElement.id} found`); 
+          }); 
+        
+          // When marker is lost 
+          markerElement.addEventListener("markerLost", () => { 
+            markersVisibility[markerElement.id] = false; 
+            console.log(`${markerElement.id} lost`); 
+          }); 
+        } 
+      }); 
+
+      /** 
+       * Three.js Key Concepts 
+       *  
+       * 1. Vector3: Represents a point in 3D space 
+       *    new THREE.Vector3(x, y, z) 
+       *  
+       * 2. BufferGeometry: Holds geometry data 
+       *    └── position attribute: Array of coordinates 
+       *  
+       * 3. Position Array Structure: 
+       *    For a line between points A and B: 
+       *    [Ax, Ay, Az,  Bx, By, Bz] 
+       *     0   1   2    3   4   5 
+       *  
+       * Example: 
+       * Point A(1,0,0) to Point B(0,1,0): 
+       * [1, 0, 0,  0, 1, 0] 
+       */ 
+
+       AFRAME.registerComponent("line-drawer", { 
+        schema: { 
+          marker0: { type: 'selector' }, 
+          marker1: { type: 'selector' } 
+        }, 
+      
+        init: function () { 
+          // Create line material 
+          const material = new THREE.LineBasicMaterial({ 
+            color: 0x0000ff,    // White color 
+            linewidth: 500,       // Line thickness 
+            opacity: 0.8,       // Slight transparency 
+            transparent: true   // Enable transparency 
+          }); 
+      
+          // Create line geometry 
+          const geometry = new THREE.BufferGeometry(); 
+          const positions = new Float32Array(6); // 2 points × 3 coordinates 
+          geometry.setAttribute('position',  
+            new THREE.BufferAttribute(positions, 3)); 
+      
+          // Create the line 
+          this.line = new THREE.Line(geometry, material); 
+          this.el.object3D.add(this.line); 
+      
+          // Initialize position trackers 
+          this.marker0Pos = new THREE.Vector3(); 
+          this.marker1Pos = new THREE.Vector3(); 
+        }, 
+      
+        tick: function () { 
+          if (!this.data.marker0 || !this.data.marker1) return; 
+      
+          if (markersVisibility.marker0 && markersVisibility.marker1) { 
+            // Get current marker positions 
+            this.data.marker0.object3D.getWorldPosition(this.marker0Pos); 
+            this.data.marker1.object3D.getWorldPosition(this.marker1Pos); 
+      
+            // Update line positions 
+            const positions = this.line.geometry.attributes.position.array; 
+            
+            // Start point 
+            positions[0] = this.marker0Pos.x; 
+            positions[1] = this.marker0Pos.y; 
+            positions[2] = this.marker0Pos.z; 
+      
+            // End point 
+            positions[3] = this.marker1Pos.x; 
+            positions[4] = this.marker1Pos.y; 
+            positions[5] = this.marker1Pos.z; 
+      
+            // Tell Three.js to update 
+            this.line.geometry.attributes.position.needsUpdate = true; 
+            this.line.visible = true; 
+          } else { 
+            this.line.visible = false; 
+          } 
+        } 
+      }); 
+
+      /** 
+       * Triangle Structure in Three.js 
+       *  
+       * Points:        Marker0 (Red) 
+       *                   • 
+       *                  / \ 
+       *                 /   \ 
+       *                /     \ 
+       *               /       \ 
+       *              •─────────• 
+       *    Marker1 (Green)    Marker2 (Blue) 
+       *  
+       * Position Array Structure: 
+       * [M0x, M0y, M0z,  M1x, M1y, M1z,  M2x, M2y, M2z] 
+       *  0    1    2     3    4    5     6    7    8 
+       *  
+       * Example triangle vertices: 
+       * Marker0: (0, 1, 0)  // Top 
+       * Marker1: (-1, 0, 0) // Bottom Left 
+       * Marker2: (1, 0, 0)  // Bottom Right 
+       */ 
+
+      AFRAME.registerComponent("triangle-drawer", { 
+        schema: { 
+          marker0: { type: 'selector' }, // Red vertex 
+          marker1: { type: 'selector' }, // Green vertex 
+          marker2: { type: 'selector' }  // Blue vertex 
+        }, 
+      
+        init: function () { 
+          // Create triangle geometry 
+          const positions = new Float32Array([ 
+            0, 0, 0, // Vertex 0 (Red) 
+            0, 0, 0, // Vertex 1 (Green) 
+            0, 0, 0  // Vertex 2 (Blue) 
+          ]); 
+      
+          // Set distinct colors for each vertex 
+          const colors = new Float32Array([ 
+            1, 0, 0, // Red 
+            0, 1, 0, // Green 
+            0, 0, 1  // Blue 
+          ]); 
+      
+          // Create and configure geometry 
+          const geometry = new THREE.BufferGeometry(); 
+          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3)); 
+          geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3)); 
+      
+          // Create material with vertex colors 
+          const material = new THREE.MeshBasicMaterial({ 
+            vertexColors: true, 
+            side: THREE.DoubleSide, 
+            transparent: true, 
+            opacity: 0.5 
+          }); 
+      
+          // Create and add mesh to scene 
+          this.triangleMesh = new THREE.Mesh(geometry, material); 
+          this.el.object3D.add(this.triangleMesh); 
+      
+          // Initialize position vectors 
+          this.marker0Pos = new THREE.Vector3(); 
+          this.marker1Pos = new THREE.Vector3(); 
+          this.marker2Pos = new THREE.Vector3(); 
+        } ,
+        tick: function () { 
+          /** 
+          * Your Task: Implement the tick function that: 
+          * 1. Checks if all markers exist 
+          * 2. Verifies all markers are visible 
+          * 3. Updates vertex positions based on marker positions 
+          * 4. Shows/hides triangle appropriately 
+          *  
+          * Use the line-drawer's tick function as reference 
+          * Remember to update all 9 position values (3 vertices × 3 coordinates) 
+          */ 
+          if (!this.data.marker0 || !this.data.marker1 || !this.data.marker2) return; 
+      
+          if (markersVisibility.marker0 && markersVisibility.marker1 && markersVisibility.marker2) { 
+            // Get current marker positions 
+            this.data.marker0.object3D.getWorldPosition(this.marker0Pos); 
+            this.data.marker1.object3D.getWorldPosition(this.marker1Pos);
+            this.data.marker2.object3D.getWorldPosition(this.marker2Pos); 
+      
+            // Update line positions 
+            // const positions = this.line.geometry.attributes.position.array;
+            const positions = this.triangleMesh.geometry.attributes.position.array;
+
+            
+            // Vertex 0 (Marker0)
+            positions[0] = this.marker0Pos.x;
+            positions[1] = this.marker0Pos.y;
+            positions[2] = this.marker0Pos.z;
+
+      
+            // Vertex 1 (Marker1)
+            positions[3] = this.marker1Pos.x;
+            positions[4] = this.marker1Pos.y;
+            positions[5] = this.marker1Pos.z;
+
+
+            // Vertex 2 (Marker2)
+            positions[6] = this.marker2Pos.x;
+            positions[7] = this.marker2Pos.y;
+            positions[8] = this.marker2Pos.z;
+
+      
+            // Tell Three.js to update 
+            this.triangleMesh.geometry.attributes.position.needsUpdate = true; 
+            this.triangleMesh.visible = true; 
+          } else { 
+            this.triangleMesh.visible = false; 
+          } 
+        } 
+    }); 
+
+
+    </script>
+
+    <!-- Scene Configuration --> 
+    <a-scene 
+      embedded 
+      vr-mode-ui="enabled:false" 
+      arjs="sourceType: webcam;  
+            detectionMode: mono_and_matrix;  
+            matrixCodeType: 3x3_PARITY65"> 
+ 
+      <!-- Line drawing container --> 
+      <a-entity line-drawer="marker0: #marker0; marker1: #marker4"></a-entity>
+
+      <!-- Single Marker Test --> 
+       <!-- Marker 0: Red --> 
+      <a-marker type="barcode" value="0" id="marker0" marker-visibility-handler> 
+          <a-box position="0 0.5 0" color="red" opacity="0.5"></a-box> 
+          <!-- Replace a-box with --> 
+          <!-- <a-sphere position="0 0.5 0" color="blue" radius="0.5" opacity="0.5"></a-sphere>  -->
+          <!-- or --> 
+          <!-- <a-cylinder position="0 0.5 0" color="green" radius="0.5" opacity="0.5"></a-cylinder> -->
+      </a-marker> 
+      
+      <!-- Marker 1: Green --> 
+    <a-marker type="barcode" value="1" id="marker1" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="green" opacity="0.5"></a-box> 
+    </a-marker>
+    <!-- Marker 2: Blue --> 
+    <a-marker type="barcode" value="2" id="marker2" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="blue" opacity="0.5"></a-box> 
+    </a-marker>
+    <!-- Marker 3: Magenta --> 
+    <a-marker type="barcode" value="3" id="marker3" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="magenta" opacity="0.5"></a-box> 
+    </a-marker>
+    <!-- Marker 4: Cyan --> 
+    <a-marker type="barcode" value="4" id="marker4" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="cyan" opacity="0.5"></a-box> 
+    </a-marker>
+    <!-- Marker 5: Yellow --> 
+    <a-marker type="barcode" value="5" id="marker5" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="yellow" opacity="0.5"></a-box> 
+    </a-marker>
+    <!-- Marker 6: White --> 
+    <a-marker type="barcode" value="6" id="marker6" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="white" opacity="0.5"></a-box> 
+    </a-marker>
+    <!-- Marker 7: Grey --> 
+    <a-marker type="barcode" value="7" id="marker7" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="grey" opacity="0.5"></a-box> 
+    </a-marker>
+    <!-- Marker 8: Black --> 
+    <a-marker type="barcode" value="8" id="marker8" marker-visibility-handler> 
+        <a-box position="0 0.5 0" color="black" opacity="0.5"></a-box> 
+    </a-marker>
+
+      <!-- Triangle drawer entity --> 
+      <a-entity  
+        triangle-drawer="marker0: #marker0; marker1: #marker2; marker2: #marker8"> 
+      </a-entity> 
+      <!-- Camera --> 
+      <a-entity camera></a-entity> 
+    </a-scene> 
+  </body> 
+</html>
